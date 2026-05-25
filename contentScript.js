@@ -232,6 +232,10 @@
   document.addEventListener("click", onClick, true);
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message.type === "CLICK_NOTES_PING") {
+      sendResponse({ loaded: true });
+      return true;
+    }
     if (message.type === "CLICK_NOTES_TOGGLE_CAPTURE") {
       captureEnabled = !captureEnabled;
       if (!captureEnabled) {

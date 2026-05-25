@@ -12,7 +12,19 @@ async function getActiveTab() {
   return tab;
 }
 
+async function isContentScriptLoaded(tabId) {
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, { type: "CLICK_NOTES_PING" });
+    return Boolean(response?.loaded);
+  } catch {
+    return false;
+  }
+}
+
 async function ensureInjected(tabId) {
+  const alreadyLoaded = await isContentScriptLoaded(tabId);
+  if (alreadyLoaded) return;
+
   await chrome.scripting.insertCSS({ target: { tabId }, files: ["contentStyle.css"] });
   await chrome.scripting.executeScript({ target: { tabId }, files: ["contentScript.js"] });
 }
