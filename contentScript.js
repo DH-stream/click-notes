@@ -6,6 +6,7 @@
   let hoveredElement = null;
   let selectedElement = null;
   let modalOpen = false;
+  let pinLayer = null;
 
   function escapeCssValue(value) {
     if (!value) return "";
@@ -67,6 +68,48 @@
     const parent = element.parentElement;
     const section = element.closest(selector);
     return getTextSnippet(section?.innerText || parent?.innerText || "", 220);
+  }
+
+
+  function getPageKey(url) {
+    try {
+      return new URL(url).origin + new URL(url).pathname;
+    } catch {
+      return url || "";
+    }
+  }
+
+  function ensurePinLayer() {
+    if (pinLayer && document.body.contains(pinLayer)) return pinLayer;
+    pinLayer = document.createElement("div");
+    pinLayer.id = "click-notes-pin-layer";
+    document.body.appendChild(pinLayer);
+    return pinLayer;
+  }
+
+  function createPin(number, rect) {
+    if (!rect) return;
+    const layer = ensurePinLayer();
+    const pin = document.createElement("div");
+    pin.className = "click-notes-pin";
+    pin.textContent = String(number);
+    pin.style.left = `${Math.max(8, (rect.x || 0) + window.scrollX - 8)}px`;
+    pin.style.top = `${Math.max(8, (rect.y || 0) + window.scrollY - 10)}px`;
+    layer.appendChild(pin);
+  }
+
+  async function renderPinsForCurrentPage() {
+    const layer = ensurePinLayer();
+    layer.innerHTML = "";
+    const { notes } = await chrome.storage.local.get({ notes: [] });
+    const pageKey = getPageKey(window.location.href);
+    let pinNumber = 0;
+    notes.forEach((note) => {
+      if (getPageKey(note.url) !== pageKey) return;
+      if (!note.rect) return;
+      pinNumber += 1;
+      createPin(pinNumber, note.rect);
+    });
   }
 
   function clearHighlight() {
@@ -199,7 +242,9 @@
     const saveCurrentNote = async () => {
       const comment = textarea.value;
       if (!comment.trim()) return textarea.focus();
-      const count = await saveNote(buildNotePayload(target, comment));
+      const note = buildNotePayload(target, comment);
+      const count = await saveNote(note);
+      await renderPinsForCurrentPage();
       closeModal();
       showToast(`${count} notes saved`);
     };
@@ -236,13 +281,25 @@
       sendResponse({ loaded: true });
       return true;
     }
-    if (message.type === "CLICK_NOTES_TOGGLE_CAPTURE") {
-      captureEnabled = !captureEnabled;
+    if (message.type === "CLICK_NOTES_START_CAPTURE") {
+      captureEnabled = true;
+      renderPinsForCurrentPage();
+      chrome.storage.local.get({ notes: [] }).then(({ notes }) => sendResponse({ captureEnabled, noteCount: notes.length }));
+      return true;
+    }
+    if (message.type === "CLICK_NOTES_STOP_CAPTURE") {
+      captureEnabled = false;
       if (!captureEnabled) {
         clearHighlight();
         clearSelected();
       }
       chrome.storage.local.get({ notes: [] }).then(({ notes }) => sendResponse({ captureEnabled, noteCount: notes.length }));
+      return true;
+    }
+    if (message.type === "CLICK_NOTES_CLEAR_PINS") {
+      const layer = ensurePinLayer();
+      layer.innerHTML = "";
+      sendResponse({ cleared: true });
       return true;
     }
     if (message.type === "CLICK_NOTES_GET_STATE") {

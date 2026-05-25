@@ -1,10 +1,15 @@
-const toggleCaptureBtn = document.getElementById("toggleCapture");
-const copyNotesBtn = document.getElementById("copyNotes");
-const clearNotesBtn = document.getElementById("clearNotes");
-const statusEl = document.getElementById("status");
+const recordBtn = document.getElementById("recordBtn");
+const stopBtn = document.getElementById("stopBtn");
+const copyBtn = document.getElementById("copyBtn");
+const clearBtn = document.getElementById("clearBtn");
 
-function setStatus(message) {
-  statusEl.textContent = message;
+function setRecordingUI(isRecording) {
+  recordBtn.style.display = isRecording ? "none" : "block";
+  stopBtn.style.display = isRecording ? "block" : "none";
+}
+
+function setCopyLabel(noteCount) {
+  copyBtn.textContent = noteCount > 0 ? `Copy ${noteCount}` : "Copy";
 }
 
 async function getActiveTab() {
@@ -24,26 +29,18 @@ async function isContentScriptLoaded(tabId) {
 async function ensureInjected(tabId) {
   const alreadyLoaded = await isContentScriptLoaded(tabId);
   if (alreadyLoaded) return;
-
   await chrome.scripting.insertCSS({ target: { tabId }, files: ["contentStyle.css"] });
   await chrome.scripting.executeScript({ target: { tabId }, files: ["contentScript.js"] });
 }
 
-async function sendToActiveTab(type, payload = {}) {
+async function sendToActiveTab(type) {
   const tab = await getActiveTab();
   if (!tab?.id) throw new Error("No active tab found");
-
-  if (type === "CLICK_NOTES_TOGGLE_CAPTURE") {
-    await ensureInjected(tab.id);
-  }
-
-  return chrome.tabs.sendMessage(tab.id, { type, ...payload });
+  if (type === "CLICK_NOTES_START_CAPTURE") await ensureInjected(tab.id);
+  return chrome.tabs.sendMessage(tab.id, { type });
 }
 
-function quoted(value) {
-  return value ? `"${value}"` : "n/a";
-}
-
+function quoted(value) { return value ? `"${value}"` : "n/a"; }
 function formatImplementationClues(note) {
   const clues = [];
   if (note.text) clues.push(`- Search repo for visible text: ${quoted(note.text)}`);
@@ -52,14 +49,13 @@ function formatImplementationClues(note) {
   if (Array.isArray(note.classList) && note.classList.length) clues.push(`- Search repo for class names: ${note.classList.slice(0, 4).join(", ")}`);
   if (note.selector) clues.push(`- Search repo for selector: ${quoted(note.selector)}`);
   if (note.pathname) clues.push(`- Search route/page: ${note.pathname}`);
-  return clues.length ? clues : ["- No strong implementation clues found"]; 
+  return clues.length ? clues : ["- No strong implementation clues found"];
 }
 
 function formatNoteBlock(note, index) {
-  const lines = [
+  return [
     `### Note ${index + 1}`,
-    "",
-    "Target:",
+    "", "Target:",
     `- Tag: ${note.tagName || "n/a"}`,
     `- Selector: ${note.selector || "n/a"}`,
     `- Fallback path: ${note.fallbackPath || "n/a"}`,
@@ -75,94 +71,77 @@ function formatNoteBlock(note, index) {
     `- Id: ${note.id || "n/a"}`,
     `- Class list: ${(note.classList || []).join(" ") || "n/a"}`,
     `- Position: x=${note.rect?.x ?? "?"} y=${note.rect?.y ?? "?"} w=${note.rect?.width ?? "?"} h=${note.rect?.height ?? "?"}`,
-    "",
-    "Nearby context:",
+    "", "Nearby context:",
     `- Parent text: ${note.parentText || "n/a"}`,
     `- Section text: ${note.sectionText || "n/a"}`,
     `- Route: ${note.pathname || "n/a"}`,
-    "",
-    "Visual clues:",
+    "", "Visual clues:",
     `- Color: ${note.visual?.color || "n/a"}`,
     `- Background: ${note.visual?.backgroundColor || "n/a"}`,
     `- Font size: ${note.visual?.fontSize || "n/a"}`,
     `- Font weight: ${note.visual?.fontWeight || "n/a"}`,
     `- Border radius: ${note.visual?.borderRadius || "n/a"}`,
     `- Box shadow: ${note.visual?.boxShadow || "n/a"}`,
-    "",
-    "Implementation clues:",
-    ...formatImplementationClues(note),
-    "",
-    "Comment:",
-    note.comment,
-    ""
-  ];
-
-  return lines.join("\n");
+    "", "Implementation clues:", ...formatImplementationClues(note),
+    "", "Comment:", note.comment, ""
+  ].join("\n");
 }
 
 function buildMarkdown(notes) {
-  const byPage = notes.reduce((acc, note) => {
-    const key = note.url || "unknown";
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(note);
-    return acc;
-  }, {});
-
+  const byPage = notes.reduce((acc, note) => ((acc[note.url || "unknown"] ||= []).push(note), acc), {});
   const lines = ["# Visual build notes", "", `Generated: ${new Date().toISOString()}`, ""];
-
   Object.entries(byPage).forEach(([url, pageNotes]) => {
-    lines.push(`## Page: ${url}`);
-    lines.push("");
-    lines.push(`Title: ${pageNotes[0].title || "Untitled"}`);
-    lines.push(`Viewport: ${pageNotes[0].viewport?.width || "?"}x${pageNotes[0].viewport?.height || "?"}`);
-    lines.push("");
+    lines.push(`## Page: ${url}`, "", `Title: ${pageNotes[0].title || "Untitled"}`, `Viewport: ${pageNotes[0].viewport?.width || "?"}x${pageNotes[0].viewport?.height || "?"}`, "");
     pageNotes.forEach((note, idx) => lines.push(formatNoteBlock(note, idx)));
   });
-
   return lines.join("\n").trim();
 }
 
+async function flashButton(button, text, restoreText) {
+  button.textContent = text;
+  await new Promise((r) => setTimeout(r, 900));
+  button.textContent = restoreText;
+}
+
 async function refresh() {
+  const { notes } = await chrome.storage.local.get({ notes: [] });
+  setCopyLabel(notes.length);
   try {
     const state = await sendToActiveTab("CLICK_NOTES_GET_STATE");
-    toggleCaptureBtn.textContent = state?.captureEnabled ? "Stop capture" : "Start capture";
-    setStatus(`${state?.noteCount || 0} saved notes`);
+    setRecordingUI(Boolean(state?.captureEnabled));
   } catch {
-    toggleCaptureBtn.textContent = "Start capture";
-    const { notes } = await chrome.storage.local.get({ notes: [] });
-    setStatus(`${notes.length} saved notes`);
+    setRecordingUI(false);
   }
 }
 
-toggleCaptureBtn.addEventListener("click", async () => {
+recordBtn.addEventListener("click", async () => {
   try {
-    const result = await sendToActiveTab("CLICK_NOTES_TOGGLE_CAPTURE");
-    toggleCaptureBtn.textContent = result.captureEnabled ? "Stop capture" : "Start capture";
-    setStatus(result.captureEnabled ? "Capture enabled" : "Capture stopped");
-  } catch {
-    setStatus("Could not start capture on this tab");
-  }
+    await sendToActiveTab("CLICK_NOTES_START_CAPTURE");
+    await refresh();
+  } catch {}
 });
 
-copyNotesBtn.addEventListener("click", async () => {
+stopBtn.addEventListener("click", async () => {
   try {
-    const { notes } = await chrome.storage.local.get({ notes: [] });
-    if (!notes.length) {
-      setStatus("No notes to copy");
-      return;
-    }
-    const markdown = buildMarkdown(notes);
-    await navigator.clipboard.writeText(markdown);
-    setStatus(`Copied ${notes.length} notes`);
-  } catch {
-    setStatus("Copy failed");
-  }
+    await sendToActiveTab("CLICK_NOTES_STOP_CAPTURE");
+    await refresh();
+  } catch {}
 });
 
-clearNotesBtn.addEventListener("click", async () => {
+copyBtn.addEventListener("click", async () => {
+  const { notes } = await chrome.storage.local.get({ notes: [] });
+  if (!notes.length) return;
+  try {
+    await navigator.clipboard.writeText(buildMarkdown(notes));
+    await flashButton(copyBtn, "Copied", notes.length > 0 ? `Copy ${notes.length}` : "Copy");
+  } catch {}
+});
+
+clearBtn.addEventListener("click", async () => {
   await chrome.storage.local.set({ notes: [] });
-  setStatus("Cleared notes");
-  refresh();
+  try { await sendToActiveTab("CLICK_NOTES_CLEAR_PINS"); } catch {}
+  await flashButton(clearBtn, "Cleared", "Clear");
+  await refresh();
 });
 
 refresh();
