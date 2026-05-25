@@ -93,8 +93,10 @@
     const pin = document.createElement("div");
     pin.className = "click-notes-pin";
     pin.textContent = String(number);
-    pin.style.left = `${Math.max(8, (rect.x || 0) + window.scrollX - 8)}px`;
-    pin.style.top = `${Math.max(8, (rect.y || 0) + window.scrollY - 10)}px`;
+    const docX = typeof rect.documentX === "number" ? rect.documentX : Math.round((rect.x || 0) + window.scrollX);
+    const docY = typeof rect.documentY === "number" ? rect.documentY : Math.round((rect.y || 0) + window.scrollY);
+    pin.style.left = `${Math.max(8, docX - 8)}px`;
+    pin.style.top = `${Math.max(8, docY - 10)}px`;
     layer.appendChild(pin);
   }
 
@@ -182,7 +184,14 @@
       classList: Array.from(element.classList || []),
       selector: getElementSelector(element),
       fallbackPath: buildFallbackPath(element),
-      rect: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) },
+      rect: {
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        documentX: Math.round(rect.x + window.scrollX),
+        documentY: Math.round(rect.y + window.scrollY)
+      },
       parentText: getContextText(element, "section, article, main, form, nav, aside"),
       sectionText: getContextText(element, "section, article, form, [role='region'], [data-testid]"),
       visual: {
