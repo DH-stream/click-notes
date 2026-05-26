@@ -60,9 +60,18 @@ function renderNotePreviews(notes) {
   notes.forEach((note, idx) => {
     const row = document.createElement("div");
     row.className = "note-row";
-    // Show full comment text, no truncation
     const text = (note.comment || "").trim();
     row.innerHTML = `<span class="num">${idx + 1}</span><span class="text">${text}</span>`;
+    row.title = "Click to edit";
+    row.style.cursor = "pointer";
+    row.addEventListener("click", async () => {
+      try {
+        const tab = await getActiveTab();
+        if (!tab?.id) return;
+        await chrome.tabs.sendMessage(tab.id, { type: "CLICK_NOTES_EDIT_NOTE", noteIndex: idx });
+        window.close(); // close popup so user can see the edit modal on the page
+      } catch {}
+    });
     notesList.appendChild(row);
   });
 }
@@ -167,7 +176,13 @@ copyBtn.addEventListener("click", async () => {
 
 clearBtn.addEventListener("click", async () => {
   await chrome.storage.local.set({ notes: [] });
-  try { await sendToActiveTab("CLICK_NOTES_CLEAR_PINS"); } catch {}
+  try {
+    const tab = await getActiveTab();
+    if (tab?.id) {
+      await ensureInjected(tab.id);
+      await chrome.tabs.sendMessage(tab.id, { type: "CLICK_NOTES_CLEAR_PINS" });
+    }
+  } catch {}
   await flashButton(clearBtn, "Cleared", "Clear");
   await refresh();
 });

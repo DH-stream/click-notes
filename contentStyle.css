@@ -178,3 +178,44 @@
   text-align: center;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
+
+.cn-hint {
+  font-size: 11px;
+  color: #888;
+  background: #1a1a1a;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin-bottom: 9px;
+  line-height: 1.5;
+}
+
+.cn-hint code {
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;
+  color: #c8c8c8;
+  font-size: 10.5px;
+}
+
+#click-notes-delete {
+  background: transparent;
+  color: #666;
+  border-color: rgba(255, 255, 255, 0.06);
+  margin-right: auto;
+}
+
+#click-notes-delete:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.click-notes-pin-clickable {
+  cursor: pointer !important;
+  pointer-events: all !important;
+  transition: transform 100ms, background 100ms;
+}
+
+.click-notes-pin-clickable:hover {
+  background: #ffffff;
+  transform: scale(1.15);
+}
