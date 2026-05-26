@@ -328,7 +328,7 @@
 
   document.addEventListener("mousemove", onMouseMove, true);
   document.addEventListener("click", onClick, true);
-  window.addEventListener("scroll", scheduleOverlaySync, { passive: true });
+  document.addEventListener("scroll", scheduleOverlaySync, { passive: true, capture: true });
   window.addEventListener("resize", scheduleOverlaySync);
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
